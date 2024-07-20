@@ -11,6 +11,8 @@ import pygame
 from http.client import IncompleteRead
 import tempfile
 from fuzzywuzzy import process
+import sqlite3
+from datetime import datetime
 
 # Initialize pygame mixer
 pygame.mixer.init()
@@ -19,7 +21,7 @@ pygame.mixer.init()
 med_df = pd.read_csv('obat.csv')
 
 # Replace the URL with the IP camera's stream URL
-url = 'http://192.168.0.104/cam-hi.jpg'
+url = 'http://192.168.0.102/cam-hi.jpg'
 print('Opening Window')
 cv2.namedWindow("live Cam Testing", cv2.WINDOW_AUTOSIZE)
 
@@ -30,6 +32,34 @@ print('Displaying...')
 def calculate_area(box):
     height = box[2][1] - box[0][1]
     return height
+
+def create_db():
+    conn = sqlite3.connect('medicine_data.db')
+    c = conn.cursor()
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS detections (
+            id INTEGER PRIMARY KEY,
+            timestamp TEXT,
+            nama_obat TEXT,
+            jenis_takaran TEXT,
+            efek_samping TEXT,
+            indikasi TEXT
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+def insert_data(timestamp, nama_obat, jenis_takaran, efek_samping, indikasi):
+    conn = sqlite3.connect('medicine_data.db')
+    c = conn.cursor()
+    c.execute('''
+        INSERT INTO detections (timestamp, nama_obat, jenis_takaran, efek_samping, indikasi)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (timestamp, nama_obat, jenis_takaran, efek_samping, indikasi))
+    conn.commit()
+    conn.close()
+
+create_db()
 
 def main():
     while True:
@@ -53,7 +83,12 @@ def main():
                 best_match = process.extractOne(text, med_df['NAMA'], score_cutoff=70)
                 if best_match:
                     matched_data = med_df[med_df['NAMA'] == best_match[0]].iloc[0]
-                    details = f"Nama obat: {matched_data['NAMA']}, Jenis Takaran: {matched_data['Jenis/Takaran']}, Instruksi Pemakaian: {matched_data['Instruksi Pemakaian']}, Efek Samping: {matched_data['Efek Samping']}, Indikasi: {matched_data['Indikasi']}"
+                    details = f"Nama obat: {matched_data['NAMA']}, Jenis Takaran: {matched_data['Jenis/Takaran']}, Instruksi Pemakaian (Perhatikan Instruksi Pemakaian dengan seksama): {matched_data['Instruksi Pemakaian']}, Efek Samping: {matched_data['Efek Samping']}, Indikasi: {matched_data['Indikasi']}"
+                    
+                    # Store detection time and details in the database
+                    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    insert_data(timestamp, matched_data['NAMA'], matched_data['Jenis/Takaran'], matched_data['Efek Samping'], matched_data['Indikasi'])
+                    
                     tts = gTTS(text=details, lang='id')
                     with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as temp_audio:
                         temp_audio_path = temp_audio.name
@@ -67,6 +102,7 @@ def main():
 
             cv2.imshow('live Cam Testing', im)
         except IncompleteRead:
+            print('tes')
             continue
         except Exception as e:
             print(f"An error occurred: {e}")
