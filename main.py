@@ -56,6 +56,8 @@ def main():
                     if df_sorted.iloc[1]['area'] >= df_sorted.iloc[0]['area'] * 0.8:
                         text += ' ' + df_sorted.iloc[1]['text']
 
+                print(text)
+
 
                 tts = gTTS(text=text, lang='id')
                 tts.save("output.mp3")
